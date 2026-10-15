@@ -18,11 +18,13 @@ fetch_repo kernel/KernelSU https://github.com/tiann/KernelSU.git 3291538446b7fcc
 fetch_repo toolchain https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git 5e030eafe024784a73cdf47e6936ac0dbfc763dc
 
 export ARCH=arm64
+export PATH="$ROOT/toolchain/bin:$PATH"
 export CROSS_COMPILE="$ROOT/toolchain/bin/aarch64-linux-android-"
 export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 export KBUILD_BUILD_USER=builder
 export KBUILD_BUILD_HOST=github-actions
 "${CROSS_COMPILE}gcc" --version
+aarch64-linux-android-cpp --version
 
 cd kernel
 git apply --check "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
