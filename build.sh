@@ -2,6 +2,11 @@
 set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 cd "$ROOT"
+BUILD_VARIANT=${BUILD_VARIANT:-droidspaces}
+case "$BUILD_VARIANT" in
+    baseline|no-memcg|droidspaces) ;;
+    *) printf 'Unknown build variant: %s\n' "$BUILD_VARIANT" >&2; exit 1 ;;
+esac
 mkdir -p artifacts
 exec > >(tee -a "$ROOT/artifacts/build.log") 2>&1
 
@@ -27,19 +32,42 @@ export KBUILD_BUILD_HOST=github-actions
 aarch64-linux-android-cpp --version
 
 cd kernel
-git apply --check "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
-git apply "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
+if [[ "$BUILD_VARIANT" != baseline ]]; then
+    git apply --check "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
+    git apply "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
+fi
 git diff --check
 git diff --binary > "$ROOT/artifacts/applied-source.patch"
+# Match the original release for the baseline; do not add SCM hash/dirty suffixes.
+: > .scmversion
 mkdir -p out
 gzip -dc "$ROOT/original.config.gz" > out/original.config
-scripts/kconfig/merge_config.sh -m -O out out/original.config "$ROOT/droidspaces.config"
+if [[ "$BUILD_VARIANT" == baseline ]]; then
+    cp out/original.config out/.config
+    expected_config=out/original.config
+    image_name=BLA_EMUI9.1_KernelSU_baseline.img
+else
+    cp "$ROOT/droidspaces.config" out/variant.config
+    image_name=BLA_EMUI9.1_KernelSU_DroidSpaces.img
+    if [[ "$BUILD_VARIANT" == no-memcg ]]; then
+        sed -i 's/^CONFIG_MEMCG=y$/# CONFIG_MEMCG is not set/' out/variant.config
+        sed -i 's/KernelSU_DroidSpaces_xixiaobei@Github/KernelSU_DroidSpaces_noMEMCG/' out/variant.config
+        printf '%s\n' 'CONFIG_TASK_PROTECT_LRU=y' >> out/variant.config
+        image_name=BLA_EMUI9.1_KernelSU_DroidSpaces_noMEMCG.img
+    fi
+    scripts/kconfig/merge_config.sh -m -O out out/original.config out/variant.config
+    expected_config=out/variant.config
+fi
 make O=out PYTHON=python2 olddefconfig
-python3 "$ROOT/verify_config.py" out/.config "$ROOT/droidspaces.config"
+python3 "$ROOT/verify_config.py" out/.config "$expected_config"
+cp "$expected_config" "$ROOT/artifacts/expected.config"
 cp out/.config "$ROOT/artifacts/kernel.config"
 python2 scripts/diffconfig out/original.config out/.config > "$ROOT/artifacts/config-changes.txt"
 make O=out PYTHON=python2 -j"$(nproc)" Image.gz modules
-python3 "$ROOT/repack.py" "$ROOT/boot-header.bin" out/arch/arm64/boot/Image.gz "$ROOT/artifacts/BLA_EMUI9.1_KernelSU_DroidSpaces.img"
+cp out/System.map "$ROOT/artifacts/System.map"
+gzip -1 -c out/vmlinux > "$ROOT/artifacts/vmlinux.gz"
+python3 "$ROOT/repack.py" "$ROOT/boot-header.bin" out/arch/arm64/boot/Image.gz "$ROOT/artifacts/$image_name"
+printf '%s\n' "$BUILD_VARIANT" > "$ROOT/artifacts/build-variant.txt"
 cp out/Module.symvers "$ROOT/artifacts/Module.symvers"
 find out -name '*.ko' -print0 | tar --null -T - -czf "$ROOT/artifacts/rebuilt-modules.tar.gz"
 cp "$ROOT/sources.json" "$ROOT/artifacts/sources.json"

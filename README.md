@@ -1,5 +1,17 @@
 # Mate 10 Pro BLA / EMUI 9.1 KernelSU + DroidSpaces
 
+The first full DroidSpaces build was reported to bootloop. Recovered kernel
+logs confirm panics during UNIX datagram / SLUB allocation. The exact cause
+is not yet established. Do not treat that image as a working release.
+
+The manual workflow now builds two diagnostic variants: `baseline` reproduces
+the original config without DroidSpaces patches, and `no-memcg` retains the
+DroidSpaces changes except MEMCG and restores its dependent TASK_PROTECT_LRU
+setting. The latter is a hypothesis test, not a verified fix. Both variants
+include System.map and compressed vmlinux with debug information. SCM suffixes
+are suppressed so the baseline release matches the original. Neither image
+is automatically flashed. Recovered device logs remain local.
+
 Rebuild the Huawei Linux 4.9.148 BLA kernel with the kernel features needed by
 [DroidSpaces](https://github.com/ravindu644/Droidspaces-OSS).
 This repository builds the kernel. Install the DroidSpaces app separately.
@@ -12,7 +24,7 @@ KernelSU remains at upstream v0.9.2, with the existing manual hooks.
 
 ## Build
 
-Open Actions, select **Build BLA KernelSU with DroidSpaces**, then **Run workflow**.
+Open Actions, select **Build BLA KernelSU diagnostic kernels**, then **Run workflow**.
 The artifact contains the image, SHA-256, complete configuration, configuration
 diff, source patch, rebuilt modules, Module.symvers and build log.
 Source and toolchain commits are pinned in `sources.json` and `build.sh`.
