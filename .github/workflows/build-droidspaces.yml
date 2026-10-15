@@ -1,0 +1,47 @@
+name: Build BLA KernelSU with DroidSpaces
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '*.sh'
+      - '*.py'
+      - '*.config'
+      - '*.patch'
+      - '*.gz'
+      - '*.bin'
+      - 'sources.json'
+      - '.github/workflows/build-droidspaces.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    container: ubuntu:20.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install the legacy kernel build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git build-essential gcc-arm-linux-gnueabi binutils-aarch64-linux-gnu bc bison flex libssl-dev libelf-dev libncurses5 libncurses5-dev python2 python3 curl cpio rsync xz-utils gzip zip device-tree-compiler
+          ln -s /usr/bin/python2 /usr/bin/python
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile and validate DroidSpaces support
+        run: bash build.sh
+      - name: Upload image, config, modules and build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BLA-EMUI9.1-KernelSU-DroidSpaces
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
