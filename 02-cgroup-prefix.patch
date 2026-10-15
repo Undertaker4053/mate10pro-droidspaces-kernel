@@ -1,0 +1,22 @@
+Derived from ravindu644/Droidspaces-OSS non-GKI patches at a7186204762581ca0454f29f607dcd8f54f54f85.
+Original author: ravindu644 <droidcasts@protonmail.com>.
+Cgroup patch adapted to Huawei 4.9 kernel/cgroup.c.
+
+diff --git a/kernel/cgroup.c b/kernel/cgroup.c
+index c959d7e38..25fc29bc7 100644
+--- a/kernel/cgroup.c
++++ b/kernel/cgroup.c
+@@ -3693,6 +3693,13 @@ static int cgroup_add_file(struct cgroup_subsys_state *css, struct cgroup *cgrp,
+ 		spin_unlock_irq(&cgroup_file_kn_lock);
+ 	}
+ 
++	if (cft->ss && (cgrp->root->flags & CGRP_ROOT_NOPREFIX) &&
++	    !(cft->flags & CFTYPE_NO_PREFIX)) {
++		snprintf(name, CGROUP_FILE_NAME_MAX, "%s.%s",
++			 cft->ss->name, cft->name);
++		kernfs_create_link(cgrp->kn, name, kn);
++	}
++
+ 	return 0;
+ }
+ 
