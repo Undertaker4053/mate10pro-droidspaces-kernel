@@ -4,7 +4,7 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 cd "$ROOT"
 BUILD_VARIANT=${BUILD_VARIANT:-droidspaces}
 case "$BUILD_VARIANT" in
-    baseline|no-memcg|droidspaces|compat) ;;
+    baseline|no-memcg|droidspaces|compat|full-c) ;;
     *) printf 'Unknown build variant: %s\n' "$BUILD_VARIANT" >&2; exit 1 ;;
 esac
 mkdir -p artifacts
@@ -32,7 +32,7 @@ export KBUILD_BUILD_HOST=github-actions
 aarch64-linux-android-cpp --version
 
 cd kernel
-if [[ "$BUILD_VARIANT" == droidspaces || "$BUILD_VARIANT" == no-memcg ]]; then
+if [[ "$BUILD_VARIANT" == droidspaces || "$BUILD_VARIANT" == no-memcg || "$BUILD_VARIANT" == full-c ]]; then
     git apply --check "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
     git apply "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
 fi
@@ -53,12 +53,17 @@ if [[ "$BUILD_VARIANT" == baseline ]]; then
 else
     if [[ "$BUILD_VARIANT" == compat ]]; then
         cp "$ROOT/compat.config" out/variant.config
+    elif [[ "$BUILD_VARIANT" == full-c ]]; then
+        cp "$ROOT/full-c.config" out/variant.config
     else
         cp "$ROOT/droidspaces.config" out/variant.config
     fi
     image_name=BLA_EMUI9.1_KernelSU_DroidSpaces.img
     if [[ "$BUILD_VARIANT" == compat ]]; then
         image_name=BLA_EMUI9.1_KernelSU_DroidSpaces_compat.img
+    fi
+    if [[ "$BUILD_VARIANT" == full-c ]]; then
+        image_name=BLA_EMUI9.1_KernelSU_DroidSpaces_Docker_fullC.img
     fi
     if [[ "$BUILD_VARIANT" == no-memcg ]]; then
         sed -i 's/^CONFIG_MEMCG=y$/# CONFIG_MEMCG is not set/' out/variant.config
@@ -77,6 +82,9 @@ python2 scripts/diffconfig out/original.config out/.config > "$ROOT/artifacts/co
 make O=out PYTHON=python2 -j"$(nproc)" Image.gz modules
 if [[ "$BUILD_VARIANT" == compat ]]; then
     python3 "$ROOT/verify_vendor_layouts.py" out/vmlinux . "$ROOT/artifacts/vendor-layout-check.json"
+fi
+if [[ "$BUILD_VARIANT" == full-c ]]; then
+    python3 "$ROOT/verify_no_vendor_asm.py" out/vmlinux . out "$ROOT/artifacts/vendor-assembly-check.json"
 fi
 cp out/System.map "$ROOT/artifacts/System.map"
 gzip -1 -c out/vmlinux > "$ROOT/artifacts/vmlinux.gz"

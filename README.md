@@ -1,5 +1,29 @@
 # Mate 10 Pro BLA / EMUI 9.1 KernelSU + DroidSpaces
 
+## Full feature C-fallback candidate
+
+The user wants Docker and isolated Linux/networking, so the restricted `compat`
+build is an offline control, not the requested final feature set.
+**Build BLA DroidSpaces Docker full C fallback** enables the full namespace,
+bridge/NAT/veth/macvlan, memory/swap and CPU controls, common Docker networking
+and storage options. Huawei's PIDs controller is retained because it already
+exposes pids.max/current and conflicts with the parallel standard controller.
+
+To eliminate fixed-layout vendor code, `full-c.config` disables generated
+page-cache helper, proprietary block/QoS/frequency and manual UFS maintenance
+extensions, UFS vendor-package ioctl and Huawei ad/download filter. It uses
+the existing C fallback paths with the UFS controller, normal filesystems and
+deadline I/O scheduler retained. This may change storage performance, power
+behavior or vendor diagnostic features; boot and hardware are not yet verified.
+The full build retains SysV IPC, MEMCG and isolated networking; it does not use
+the restricted configuration or the POSIX queue layout patch.
+
+`verify_no_vendor_asm.py` inventories all 17 pinned generated `.S` files and
+requires that none has a compiled object or linked vendor debug unit. The
+artifact includes this evidence. Architecture assembly is unchanged. Passing
+these build checks does not establish Docker/container/phone runtime support.
+No automatic flashing or reboot is performed.
+
 ## Device results and compatibility build (2026-10-16)
 
 The baseline was manually flashed and successfully booted. Both the full build
