@@ -1,7 +1,7 @@
 # Full-feature DroidSpaces / Docker investigation — 2026-10-16
 
-No full-feature image is ready to flash. The phone is running the booted
-baseline; no phone partition writes or reboots were performed in this phase.
+No validated full-feature release exists. The baseline previously booted;
+no phone partition writes or reboots were performed in this phase.
 
 | Variant | Evidence | Use |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ and split metadata propagation. It is a porting reference, not a drop-in
 replacement for this 4.9 tree. No complete matching 4.9 C replacement for all
 seventeen generated components has been located in the repositories reviewed.
 
-## Requirements before a full-feature image can be offered
+## Requirements for a validated full-feature release
 
 1. Supply matching recompilable vendor C, or implement and audit the 4.9 C
    replacement for the complete encrypted I/O path, including allocation/reset,

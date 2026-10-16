@@ -1,6 +1,6 @@
 # Mate 10 Pro BLA / EMUI 9.1 KernelSU + DroidSpaces
 
-## Current status: C port compiled; experimental candidate preparation
+## Current status: C port compiled; experimental candidate workflow
 
 The C backport in patches 05 and 06 now passes full ARM64 compilation, 106
 configuration requirements, host crypto semantic tests and final-ELF caller
@@ -33,9 +33,9 @@ To eliminate fixed-layout vendor code, `full-c.config` disables generated
 page-cache helper, proprietary block/QoS/frequency and manual UFS maintenance
 extensions, UFS vendor-package ioctl and Huawei ad/download filter. It uses
 the existing C fallback paths with the UFS controller, normal filesystems and
-deadline I/O scheduler retained. This experiment exposed incomplete encrypted
-I/O fallback paths and is not a bootable release. The configuration retaining
-encryption options does not by itself preserve encryption semantics.
+deadline I/O scheduler retained. The missing encrypted-I/O metadata handling
+is implemented by the C backport. Runtime boot and encrypted I/O remain
+unverified; retaining encryption options alone does not establish correctness.
 The full build retains SysV IPC, MEMCG and isolated networking; it does not use
 the restricted configuration or the POSIX queue layout patch.
 

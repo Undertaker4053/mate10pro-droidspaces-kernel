@@ -59,7 +59,7 @@ current pinned source; no matching C replacements were found in that archive.
 * Full kernel compilation must succeed with the expanded container config.
   A final-ELF check inspects ARM64 branches for required helper callers, and the
   generated-assembly check must still prove all seventeen units are absent.
-* ARM64 diagnostic run [38895036795](https://github.com/Undertaker4053/mate10pro-droidspaces-kernel/actions/runs/38895036795) passed all checks. Patch 06 is undergoing the same checks in run [38896438184](https://github.com/Undertaker4053/mate10pro-droidspaces-kernel/actions/runs/38896438184).
+* ARM64 diagnostic run [38895036795](https://github.com/Undertaker4053/mate10pro-droidspaces-kernel/actions/runs/38895036795) passed all checks. Patch 06 passed the same checks in run [38896438184](https://github.com/Undertaker4053/mate10pro-droidspaces-kernel/actions/runs/38896438184).
 * Real encrypted I/O/boot remain unverified. Host tests do not establish
   disk-format compatibility, firmware interactions, power-loss behavior or
   container/Docker runtime success.
@@ -72,3 +72,5 @@ It includes an EXPERIMENTAL marker and does not publish a stable release.
 The complete applied-source diff includes newly introduced files. Build inputs,
 config, symbol map, ELF, check reports, module CRCs and rebuilt modules accompany
 candidate output. These checks do not replace hardware validation.
+
+Candidate workflow run: [38898389228](https://github.com/Undertaker4053/mate10pro-droidspaces-kernel/actions/runs/38898389228), source revision `4d6b9d40c265847b973664c7d8cb7ec3007a371a`. Its current result is shown by Actions; no hardware validation is claimed.
