@@ -1,0 +1,40 @@
+name: Build BLA DroidSpaces Docker full C fallback
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    container: ubuntu:20.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install build and debug-layout dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git build-essential gcc-arm-linux-gnueabi binutils-aarch64-linux-gnu bc bison flex libssl-dev libelf-dev libncurses5 libncurses5-dev python2 python3 python3-pip curl cpio rsync xz-utils gzip zip device-tree-compiler
+          python3 -m pip install --no-cache-dir pyelftools==0.31
+          ln -s /usr/bin/python2 /usr/bin/python
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build and check Huawei generated-assembly layouts
+        env:
+          BUILD_VARIANT: full-c
+        run: bash build.sh
+      - name: Upload image, symbols and layout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: BLA-EMUI9.1-DroidSpaces-full-C
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
