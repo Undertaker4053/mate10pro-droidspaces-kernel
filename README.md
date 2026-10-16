@@ -19,6 +19,12 @@ queues. It retains the stock memory, network and task layouts, applies neither
 experimental source patch, and rejects selected shared-structure ABI mismatches
 against all linked generated Huawei assembly debug units.
 
+POSIX queues add per-user accounting. The compatibility source patch appends
+`user_struct.mq_bytes` at the end to preserve every existing member offset.
+The ABI checker explicitly permits only this named 8-byte tail extension;
+other size or existing-field changes fail. The linked generated assembly
+contains no alloc_uid/find_user/free_uid calls or root_user references.
+
 This is a restricted compatibility candidate, **not full DroidSpaces support**:
 use host/shared networking; NAT, macvlan and user namespaces are unavailable;
 System V IPC and memory/CPU quota additions are omitted. Programs requiring

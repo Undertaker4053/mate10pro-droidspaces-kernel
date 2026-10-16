@@ -36,6 +36,10 @@ if [[ "$BUILD_VARIANT" == droidspaces || "$BUILD_VARIANT" == no-memcg ]]; then
     git apply --check "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
     git apply "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
 fi
+if [[ "$BUILD_VARIANT" == compat ]]; then
+    git apply --check "$ROOT/03-posix-mqueue-abi.patch"
+    git apply "$ROOT/03-posix-mqueue-abi.patch"
+fi
 git diff --check
 git diff --binary > "$ROOT/artifacts/applied-source.patch"
 # Match the original release for the baseline; do not add SCM hash/dirty suffixes.

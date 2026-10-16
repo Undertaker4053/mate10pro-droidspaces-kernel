@@ -24,7 +24,7 @@ assembly_paths = {name[:-2] + '.c' for name in tracked if name.endswith('.S')}
 types = {'task_struct', 'thread_struct', 'mm_struct', 'page', 'sk_buff', 'sock',
          'sock_common', 'net_device', 'bio', 'request', 'request_queue',
          'file', 'inode', 'super_block', 'cred', 'signal_struct', 'nsproxy',
-         'sched_entity', 'task_group', 'cgroup', 'cgroup_subsys_state', 'kmem_cache'}
+         'sched_entity', 'task_group', 'cgroup', 'cgroup_subsys_state', 'kmem_cache', 'user_struct'}
 
 
 def structures(cu):
@@ -77,6 +77,7 @@ for cu in dwarf.iter_CUs():
 assert assembly, 'No generated Huawei assembly units found; refusing an empty check'
 assert all(key in canonical for key in ['task_struct', 'sk_buff', 'sock', 'sock_common', 'page', 'bio', 'request_queue'])
 differences = []
+tail_extensions = []
 comparisons = 0
 for unit in assembly:
     for name, old in unit['types'].items():
@@ -86,12 +87,21 @@ for unit in assembly:
         comparisons += 1
         changed = {field: {'assembly': value, 'rebuilt': new['members'].get(field)}
                    for field, value in old['members'].items() if new['members'].get(field) != value}
-        if old['size'] != new['size'] or changed:
+        tail_extension = (name == 'user_struct' and not changed
+                          and new['size'] == old['size'] + 8
+                          and new['members'].get('mq_bytes', {}).get('offset') == old['size']
+                          and set(new['members']) == set(old['members']) | {'mq_bytes'})
+        if tail_extension:
+            tail_extensions.append({'source': unit['source'], 'type': name,
+                                    'old_size': old['size'], 'new_size': new['size'],
+                                    'added_tail_member': 'mq_bytes', 'offset': old['size']})
+        if (old['size'] != new['size'] and not tail_extension) or changed:
             differences.append({'source': unit['source'], 'type': name,
                                 'assembly_size': old['size'], 'rebuilt_size': new['size'],
                                 'changed_members': changed})
 report = {'passed': not differences, 'assembly_units': len(assembly),
           'structure_comparisons': comparisons, 'canonical_types': canonical,
+          'allowed_tail_extensions': tail_extensions,
           'differences': differences,
           'scope': 'Sizes and named member/bitfield offsets of selected shared kernel structures. '
                    'This check does not establish runtime safety or container functionality.'}
