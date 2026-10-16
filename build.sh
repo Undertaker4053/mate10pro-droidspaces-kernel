@@ -9,6 +9,9 @@ case "$BUILD_VARIANT" in
 esac
 mkdir -p artifacts
 exec > >(tee -a "$ROOT/artifacts/build.log") 2>&1
+if [[ "$BUILD_VARIANT" == full-c ]]; then
+    printf '%s\n' 'BLOCKED: Huawei inline-encryption C migration is incomplete; no flash image is produced.' > "$ROOT/artifacts/DO-NOT-FLASH.txt"
+fi
 
 fetch_repo() {
     local directory=$1 url=$2 revision=$3
@@ -97,6 +100,14 @@ if [[ "$BUILD_VARIANT" == full-c ]]; then
 fi
 cp out/System.map "$ROOT/artifacts/System.map"
 gzip -1 -c out/vmlinux > "$ROOT/artifacts/vmlinux.gz"
+if [[ "$BUILD_VARIANT" == full-c ]]; then
+    # Deliberate release gate: removing HISI_BLK also removes inline-encryption
+    # metadata and propagation hooks. A successful compile/ASM scan alone does
+    # not validate encrypted I/O. Keep this variant diagnostic-only until a
+    # reviewed C implementation and its regression evidence replace this gate.
+    printf '%s\n' 'BLOCKED: Huawei inline-encryption C migration is incomplete; no flash image is produced.' | tee "$ROOT/artifacts/DO-NOT-FLASH.txt"
+    exit 2
+fi
 python3 "$ROOT/repack.py" "$ROOT/boot-header.bin" out/arch/arm64/boot/Image.gz "$ROOT/artifacts/$image_name"
 printf '%s\n' "$BUILD_VARIANT" > "$ROOT/artifacts/build-variant.txt"
 cp out/Module.symvers "$ROOT/artifacts/Module.symvers"

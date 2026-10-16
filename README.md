@@ -1,6 +1,21 @@
 # Mate 10 Pro BLA / EMUI 9.1 KernelSU + DroidSpaces
 
-## Full feature C-fallback candidate
+## Current status: full-feature release blocked
+
+**There is no verified full-feature bootable image. Do not flash the failed
+full/no-MEMCG builds or the experimental full-C output.** The baseline has
+booted on the phone. The restricted compat build passes CI but has not been
+boot-tested and does not meet the requested Docker/isolated-network feature set.
+
+Further source review found that `HISI_BLK` also carries F2FS/UFS inline
+encryption, including BIO/request key metadata and split/merge propagation.
+Disabling it is not merely a performance tradeoff: the existing generic C
+fallback is incomplete for this phone. The full-C compilation fails on these
+missing fields. Removing encryption or stubbing out key handling is not a fix.
+`build.sh` now blocks full-C image packaging even if a later compilation passes.
+See [FULL_FEATURE_STATUS.md](FULL_FEATURE_STATUS.md) for the remaining work.
+
+## Full feature C-fallback investigation
 
 The user wants Docker and isolated Linux/networking, so the restricted `compat`
 build is an offline control, not the requested final feature set.
@@ -13,8 +28,9 @@ To eliminate fixed-layout vendor code, `full-c.config` disables generated
 page-cache helper, proprietary block/QoS/frequency and manual UFS maintenance
 extensions, UFS vendor-package ioctl and Huawei ad/download filter. It uses
 the existing C fallback paths with the UFS controller, normal filesystems and
-deadline I/O scheduler retained. This may change storage performance, power
-behavior or vendor diagnostic features; boot and hardware are not yet verified.
+deadline I/O scheduler retained. This experiment exposed incomplete encrypted
+I/O fallback paths and is not a bootable release. The configuration retaining
+encryption options does not by itself preserve encryption semantics.
 The full build retains SysV IPC, MEMCG and isolated networking; it does not use
 the restricted configuration or the POSIX queue layout patch.
 
