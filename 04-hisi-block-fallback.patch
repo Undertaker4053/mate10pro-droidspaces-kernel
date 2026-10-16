@@ -1,0 +1,45 @@
+Complete the existing !CONFIG_HISI_BLK fallback declarations and stubs.
+No enabled-HISI_BLK implementation is changed.
+
+--- a/include/linux/blkdev.h
++++ b/include/linux/blkdev.h
+@@ -1200,7 +1200,6 @@
+ } while (0)
+ #endif
+ 
+-extern void blk_queue_dump_register(struct request_queue *q, lld_dump_status_fn func);
+ extern int blk_register_queue(struct gendisk *disk);
+ extern void blk_unregister_queue(struct gendisk *disk);
+ extern blk_qc_t generic_make_request(struct bio *bio);
+@@ -2180,6 +2179,9 @@
+ 
+ ssize_t blk_latency_hist_show(const char* name, struct io_latency_state *s,
+ 		char *buf, int buf_size);
++struct blk_busy_idle_nb;
++struct blk_dev_lld;
++
+ #ifdef CONFIG_HISI_BLK
+ extern void blk_queue_dump_register(struct request_queue *q, lld_dump_status_fn func);
+ extern void blk_mq_tagset_dump_register(struct blk_mq_tag_set *tag_set, lld_dump_status_fn func);
+@@ -2217,7 +2219,7 @@
+ #else
+ static inline void blk_queue_dump_register(struct request_queue *q, lld_dump_status_fn func) {}
+ static inline void blk_mq_tagset_dump_register(struct blk_mq_tag_set *tag_set, lld_dump_status_fn func){}
+-static inline void blk_mq_tagset_latency_warning_set(struct blk_mq_tag_set *tag_set, unsigned int warning_threshold_ms);
++static inline void blk_mq_tagset_latency_warning_set(struct blk_mq_tag_set *tag_set, unsigned int warning_threshold_ms) {}
+ static inline void blk_queue_latency_warning_set(struct request_queue *q, unsigned int warning_threshold_ms){}
+ static inline void blk_mq_tagset_latency_statistic_set(struct blk_mq_tag_set *tag_set){}
+ static inline void blk_queue_latency_statistic_set(struct request_queue *q){}
+@@ -2244,9 +2246,9 @@
+ static inline void blk_mq_tagset_ufs_mq_iosched_enable(struct blk_mq_tag_set *tag_set, int enable){}
+ static inline void blk_power_off_flush(int emergency){}
+ static inline void blk_generic_freeze(void *freeze_obj, enum blk_freeze_obj_type type, bool freeze){};
+-static void bio_set_streamid(struct bio *bio, unsigned char id){};
+-static unsigned char bio_get_streamid(struct bio *bio){return 0;}
+-static unsigned char req_get_streamid(struct request *req){return 0;}
++static inline void bio_set_streamid(struct bio *bio, unsigned char id) {}
++static inline unsigned char bio_get_streamid(struct bio *bio) { return 0; }
++static inline unsigned char req_get_streamid(struct request *req) { return 0; }
+ static inline void blk_lld_idle_notify(struct blk_dev_lld *lld){}
+ #endif
+ 

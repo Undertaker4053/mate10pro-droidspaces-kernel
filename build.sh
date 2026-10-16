@@ -40,6 +40,10 @@ if [[ "$BUILD_VARIANT" == compat ]]; then
     git apply --check "$ROOT/03-posix-mqueue-abi.patch"
     git apply "$ROOT/03-posix-mqueue-abi.patch"
 fi
+if [[ "$BUILD_VARIANT" == full-c ]]; then
+    git apply --check "$ROOT/04-hisi-block-fallback.patch"
+    git apply "$ROOT/04-hisi-block-fallback.patch"
+fi
 git diff --check
 git diff --binary > "$ROOT/artifacts/applied-source.patch"
 # Match the original release for the baseline; do not add SCM hash/dirty suffixes.
@@ -79,7 +83,12 @@ python3 "$ROOT/verify_config.py" out/.config "$expected_config"
 cp "$expected_config" "$ROOT/artifacts/expected.config"
 cp out/.config "$ROOT/artifacts/kernel.config"
 python2 scripts/diffconfig out/original.config out/.config > "$ROOT/artifacts/config-changes.txt"
-make O=out PYTHON=python2 -j"$(nproc)" Image.gz modules
+if [[ "$BUILD_VARIANT" == full-c ]]; then
+    # Collect independent fallback compile errors in one CI run; any error still fails the build.
+    make O=out PYTHON=python2 -k -j"$(nproc)" Image.gz modules
+else
+    make O=out PYTHON=python2 -j"$(nproc)" Image.gz modules
+fi
 if [[ "$BUILD_VARIANT" == compat ]]; then
     python3 "$ROOT/verify_vendor_layouts.py" out/vmlinux . "$ROOT/artifacts/vendor-layout-check.json"
 fi
