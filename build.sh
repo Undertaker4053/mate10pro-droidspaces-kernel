@@ -46,6 +46,10 @@ fi
 if [[ "$BUILD_VARIANT" == full-c ]]; then
     git apply --check "$ROOT/04-hisi-block-fallback.patch"
     git apply "$ROOT/04-hisi-block-fallback.patch"
+    git apply --check "$ROOT/05-inline-crypto-c-port.patch"
+    git apply "$ROOT/05-inline-crypto-c-port.patch"
+    # Key producers and UFS key/descriptor programming must stay pinned.
+    git diff --exit-code -- drivers/scsi/ufs/ufs-kirin.c fs/f2fs/data.c fs/direct-io.c drivers/storage_rofa/storage_row/dm-row.c
 fi
 git diff --check
 git diff --binary > "$ROOT/artifacts/applied-source.patch"
@@ -87,6 +91,9 @@ cp "$expected_config" "$ROOT/artifacts/expected.config"
 cp out/.config "$ROOT/artifacts/kernel.config"
 python2 scripts/diffconfig out/original.config out/.config > "$ROOT/artifacts/config-changes.txt"
 if [[ "$BUILD_VARIANT" == full-c ]]; then
+    python3 "$ROOT/test_inline_crypto.py" . "$ROOT/artifacts/crypto-semantic-tests.json"
+fi
+if [[ "$BUILD_VARIANT" == full-c ]]; then
     # Collect independent fallback compile errors in one CI run; any error still fails the build.
     make O=out PYTHON=python2 -k -j"$(nproc)" Image.gz modules
 else
@@ -97,6 +104,7 @@ if [[ "$BUILD_VARIANT" == compat ]]; then
 fi
 if [[ "$BUILD_VARIANT" == full-c ]]; then
     python3 "$ROOT/verify_no_vendor_asm.py" out/vmlinux . out "$ROOT/artifacts/vendor-assembly-check.json"
+    python3 "$ROOT/verify_crypto_elf.py" out/vmlinux "$ROOT/artifacts/crypto-linked-call-check.json"
 fi
 cp out/System.map "$ROOT/artifacts/System.map"
 gzip -1 -c out/vmlinux > "$ROOT/artifacts/vmlinux.gz"
@@ -105,7 +113,8 @@ if [[ "$BUILD_VARIANT" == full-c ]]; then
     # metadata and propagation hooks. A successful compile/ASM scan alone does
     # not validate encrypted I/O. Keep this variant diagnostic-only until a
     # reviewed C implementation and its regression evidence replace this gate.
-    printf '%s\n' 'BLOCKED: Huawei inline-encryption C migration is incomplete; no flash image is produced.' | tee "$ROOT/artifacts/DO-NOT-FLASH.txt"
+    printf '%s\n' 'compiled-and-checked' > "$ROOT/artifacts/full-c-build-stage.txt"
+    printf '%s\n' 'BLOCKED: C-port diagnostic build only; real encrypted I/O and boot remain untested. No flash image is produced.' | tee "$ROOT/artifacts/DO-NOT-FLASH.txt"
     exit 2
 fi
 python3 "$ROOT/repack.py" "$ROOT/boot-header.bin" out/arch/arm64/boot/Image.gz "$ROOT/artifacts/$image_name"

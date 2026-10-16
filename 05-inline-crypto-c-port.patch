@@ -1,0 +1,397 @@
+--- a/block/bio.c
++++ b/block/bio.c
+@@ -597,6 +597,7 @@
+ 	bio->bi_io_vec = bio_src->bi_io_vec;
+ 
+ 	bio_clone_blkcg_association(bio, bio_src);
++	hisi_inline_crypto_clone_bio(bio, bio_src);
+ }
+ EXPORT_SYMBOL(__bio_clone_fast);
+ 
+@@ -703,6 +704,7 @@
+ 	}
+ 
+ 	bio_clone_blkcg_association(bio, bio_src);
++	hisi_inline_crypto_clone_bio(bio, bio_src);
+ 
+ 	return bio;
+ }
+@@ -907,6 +909,7 @@
+  */
+ void bio_advance(struct bio *bio, unsigned bytes)
+ {
++	hisi_inline_crypto_advance(bio, bytes);
+ 	if (bio_integrity(bio))
+ 		bio_integrity_advance(bio, bytes);
+ 
+--- a/block/blk-core.c
++++ b/block/blk-core.c
+@@ -135,6 +135,7 @@
+ 	rq->start_time = jiffies;
+ 	set_start_time_ns(rq);
+ 	rq->part = NULL;
++	hisi_inline_crypto_req_init(rq);
+ }
+ EXPORT_SYMBOL(blk_rq_init);
+ 
+@@ -1685,6 +1686,7 @@
+ 	req->errors = 0;
+ 	req->__sector = bio->bi_iter.bi_sector;
+ 	req->ioprio = bio_prio(bio);
++	hisi_inline_crypto_init_request(req, bio);
+ #ifdef CONFIG_HISI_BLK
+ 	hisi_blk_request_init_from_bio(req, bio);
+ #endif
+@@ -2317,6 +2319,7 @@
+ 	if (rq->rq_disk &&
+ 	    should_fail_request(&rq->rq_disk->part0, blk_rq_bytes(rq)))
+ 		return -EIO;
++	hisi_inline_crypto_init_request(rq, rq->bio);
+ #ifdef CONFIG_HISI_BLK
+ 	hisi_blk_insert_cloned_request(q, rq);
+ #endif
+@@ -3218,6 +3221,7 @@
+ 	dst->nr_phys_segments = src->nr_phys_segments;
+ 	dst->ioprio = src->ioprio;
+ 	dst->extra_len = src->extra_len;
++	hisi_inline_crypto_clone_request(dst, src);
+ }
+ 
+ /**
+--- a/block/blk-merge.c
++++ b/block/blk-merge.c
+@@ -524,6 +524,8 @@
+ int ll_back_merge_fn(struct request_queue *q, struct request *req,
+ 		     struct bio *bio)
+ {
++	if (!hisi_inline_crypto_merge_allow(req, bio))
++		return 0;
+ 	if (req_gap_back_merge(req, bio))
+ 		return 0;
+ 	if (blk_integrity_rq(req) &&
+@@ -548,6 +550,8 @@
+ 		      struct bio *bio)
+ {
+ 
++	if (!hisi_inline_crypto_merge_allow(req, bio))
++		return 0;
+ 	if (req_gap_front_merge(req, bio))
+ 		return 0;
+ 	if (blk_integrity_rq(req) &&
+@@ -703,6 +707,8 @@
+ 	 * will have updated segment counts, update sector
+ 	 * counts here.
+ 	 */
++	if (!hisi_inline_crypto_merge_allow(req, next->bio))
++		return 0;
+ 	if (!ll_merge_requests_fn(q, req, next))
+ 		return 0;
+ #ifdef CONFIG_HISI_BLK
+@@ -795,6 +801,8 @@
+ 
+ 	if (req_op(rq) != bio_op(bio))
+ 		return false;
++	if (!hisi_inline_crypto_merge_allow(rq, bio))
++		return false;
+ #ifdef CONFIG_HISI_BLK
+ 	if (!hisi_blk_bio_merge_allow(rq, bio))
+ 		return false;
+--- a/block/blk-mq.c
++++ b/block/blk-mq.c
+@@ -204,6 +204,7 @@
+ 	rq->end_io = NULL;
+ 	rq->end_io_data = NULL;
+ 	rq->next_rq = NULL;
++	hisi_inline_crypto_req_init(rq);
+ 
+ 	ctx->rq_dispatched[rw_is_sync(op, op_flags)]++;
+ 
+--- a/block/blk.h
++++ b/block/blk.h
+@@ -3,6 +3,7 @@
+ 
+ #include <linux/idr.h>
+ #include <linux/blk-mq.h>
++#include <linux/hisi-inline-crypto.h>
+ #include "hisi-blk.h"
+ #include "blk-mq.h"
+ 
+--- /dev/null
++++ b/block/hisi-inline-crypto.c
+@@ -0,0 +1,126 @@
++/*
++ * Copyright (c) Huawei Technologies Co., Ltd. 2020. All rights reserved.
++ * Derived from block/mas_blk_inline_crypt.c in Huawei's kirin970 4.14 tree:
++ * f39fdf340fe2ee29db13cb8838653161d6ad7c57 (hisi-oss mirror).
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation.
++ *
++ * Backport for Huawei 4.9 without generated HISI_BLK assembly. Keep the
++ * existing UFS descriptor/key programming and its 64-byte key contract.
++ */
++#include <linux/hisi-inline-crypto.h>
++#include <linux/kernel.h>
++
++#if defined(CONFIG_SCSI_UFS_INLINE_CRYPTO) && !defined(CONFIG_HISI_BLK)
++
++#define HISI_INLINE_KEY_BYTES 64
++
++void blk_queue_set_inline_crypto_flag(struct request_queue *q, bool enable)
++{
++	q->hisi_inline_crypto = enable;
++}
++
++int is_blk_queue_support_crypto(struct request_queue *q)
++{
++	return q->hisi_inline_crypto;
++}
++
++void hisi_inline_crypto_req_init(struct request *rq)
++{
++	rq->hisi_req.ci_key = NULL;
++	rq->hisi_req.ci_key_len = 0;
++	rq->hisi_req.ci_key_index = -1;
++}
++
++void hisi_inline_crypto_init_request(struct request *rq, const struct bio *bio)
++{
++	/* Also reset recycled requests when the incoming BIO is unencrypted. */
++	hisi_inline_crypto_req_init(rq);
++	if (!bio || !bio->hisi_bio.ci_key)
++		return;
++
++	/* The stock 4.9 request initializer treats other lengths as fatal. */
++	BUG_ON(bio->hisi_bio.ci_key_len != HISI_INLINE_KEY_BYTES);
++	rq->hisi_req.ci_key = bio->hisi_bio.ci_key;
++	rq->hisi_req.ci_key_len = bio->hisi_bio.ci_key_len;
++	rq->hisi_req.ci_key_index = bio->hisi_bio.ci_key_index;
++}
++
++void hisi_inline_crypto_clone_bio(struct bio *dst, const struct bio *src)
++{
++	dst->hisi_bio = src->hisi_bio;
++}
++
++void hisi_inline_crypto_clone_request(struct request *dst,
++				    const struct request *src)
++{
++	dst->hisi_req = src->hisi_req;
++}
++
++void hisi_inline_crypto_advance(struct bio *bio, unsigned int bytes)
++{
++	u64 units;
++
++	if (!bio->hisi_bio.ci_key || !bytes || !bio_has_data(bio) ||
++	    bio_no_advance_iter(bio))
++		return;
++
++	/* Called BEFORE the iterator advances. Logical DUNs must also work for
++	 * direct-I/O user pages, whose page->index is not a file block index.
++	 * Retain the DUN for partial-page advancement until a unit is crossed.
++	 */
++	units = ((u64)(bio_offset(bio) & (PAGE_SIZE - 1)) + bytes) >> PAGE_SHIFT;
++	BUG_ON(units > (pgoff_t)-1 - bio->hisi_bio.index);
++	bio->hisi_bio.index += units;
++}
++
++static bool hisi_crypto_whole_units(const struct bio *bio)
++{
++	return bio && bio_has_data((struct bio *)bio) &&
++	       bio->bi_iter.bi_size &&
++	       !(bio->bi_iter.bi_size & (PAGE_SIZE - 1)) &&
++	       !(bio_offset(bio) & (PAGE_SIZE - 1));
++}
++
++static bool hisi_crypto_next_index(const struct bio *left,
++				 const struct bio *right)
++{
++	pgoff_t units;
++
++	/* Conservatively decline merging partial data units; I/O still works
++	 * through separate requests. bi_vcnt is not a count of the remaining
++	 * pages after splitting/trimming a BIO, so use its current byte count.
++	 */
++	if (!hisi_crypto_whole_units(left) || !hisi_crypto_whole_units(right))
++		return false;
++	units = left->bi_iter.bi_size >> PAGE_SHIFT;
++	return units <= (pgoff_t)-1 - left->hisi_bio.index &&
++	       left->hisi_bio.index + units == right->hisi_bio.index;
++}
++
++bool hisi_inline_crypto_merge_allow(const struct request *rq,
++				   const struct bio *bio)
++{
++	if (!bio->hisi_bio.ci_key && !rq->hisi_req.ci_key)
++		return true;
++	if (!bio->hisi_bio.ci_key || !rq->hisi_req.ci_key)
++		return false;
++	if (bio->hisi_bio.ci_key != rq->hisi_req.ci_key ||
++	    bio->hisi_bio.ci_key_len != HISI_INLINE_KEY_BYTES ||
++	    bio->hisi_bio.ci_key_len != rq->hisi_req.ci_key_len ||
++	    bio->hisi_bio.ci_key_index != rq->hisi_req.ci_key_index)
++		return false;
++	if (!rq->bio || !rq->biotail)
++		return false;
++
++	/* Check metadata even on a stacking queue: a lower UFS queue still
++	 * needs the original BIO's key and DUN, independent of queue capability.
++	 */
++	if (blk_rq_pos(rq) + blk_rq_sectors(rq) == bio->bi_iter.bi_sector)
++		return hisi_crypto_next_index(rq->biotail, bio);
++	if (bio->bi_iter.bi_sector + bio_sectors(bio) == blk_rq_pos(rq))
++		return hisi_crypto_next_index(bio, rq->bio);
++	return false;
++}
++#endif
+--- a/block/Makefile
++++ b/block/Makefile
+@@ -12,6 +12,7 @@
+ obj-$(CONFIG_HISI_BLK) += hisi-blk-core.o hisi-blk-dump.o hisi-blk-latency.o hisi-blk-busy-idle-notify.o \
+ 					hisi-blk-flush.o hisi-blk-iosched-ufs-mq.o hisi-blk-ft.o
+ obj-$(CONFIG_HISI_BK_OPS) += hisi-bkops-core.o hisi-bkops-sysfs.o
++obj-$(CONFIG_SCSI_UFS_INLINE_CRYPTO) += hisi-inline-crypto.o
+ obj-$(CONFIG_BOUNCE)	+= bounce.o
+ obj-$(CONFIG_BLK_DEV_BSG)	+= bsg.o
+ obj-$(CONFIG_BLK_DEV_BSGLIB)	+= bsg-lib.o
+--- a/block/partition-generic.c
++++ b/block/partition-generic.c
+@@ -468,7 +468,9 @@
+ 		}
+ 		return -EIO;
+ 	}
++#ifdef CONFIG_HISI_BLK
+ 	hisi_blk_check_partition_done(disk, true);
++#endif
+ 	/*
+ 	 * If any partition code tried to read beyond EOD, try
+ 	 * unlocking native capacity even if partition table is
+--- a/drivers/scsi/ufs/ufshcd.c
++++ b/drivers/scsi/ufs/ufshcd.c
+@@ -5844,7 +5844,9 @@
+  */
+ static void ufshcd_idle_handler(struct ufs_hba *hba)
+ {
++#ifdef CONFIG_HISI_BLK
+ 	struct blk_dev_lld *lld = &(hba->host->tag_set.lld_func);
++#endif
+ #ifdef CONFIG_HISI_DEBUG_FS
+ 	static DEFINE_RATELIMIT_STATE(idle_print_rs, (30 * HZ), 1);
+ 	u32 utp_tx_doorbell;
+@@ -5864,7 +5866,9 @@
+ 
+ 	mod_timer(&hba->idle_intr_check_timer, jiffies + msecs_to_jiffies(hba->idle_intr_check_timer_threshold));
+ #endif /* CONFIG_HISI_DEBUG_FS */
++#ifdef CONFIG_HISI_BLK
+ 	blk_lld_idle_notify(lld);
++#endif
+ }
+ 
+ /**
+--- a/include/linux/blk_types.h
++++ b/include/linux/blk_types.h
+@@ -24,6 +24,19 @@
+  * was for io checkpoint in io latency
+  */
+ #ifdef CONFIG_BLOCK
++#if defined(CONFIG_SCSI_UFS_INLINE_CRYPTO) && !defined(CONFIG_HISI_BLK)
++struct hisi_inline_crypto_bio {
++	void *ci_key;
++	int ci_key_len;
++	int ci_key_index;
++	pgoff_t index;
++};
++struct hisi_inline_crypto_req {
++	void *ci_key;
++	int ci_key_len;
++	int ci_key_index;
++};
++#endif
+ #ifdef CONFIG_HISI_BLK
+ #undef  ADDITEM
+ #define ADDITEM( _etype, _comment, _func_pointer )      _etype
+@@ -135,6 +148,9 @@
+ #ifdef CONFIG_HISI_BLK
+ 	struct blk_bio_cust hisi_bio;
+ 	struct list_head counted_list_node;
++#elif defined(CONFIG_SCSI_UFS_INLINE_CRYPTO)
++	/* Before BIO_RESET_BYTES: recycled BIOs must lose the previous key. */
++	struct hisi_inline_crypto_bio hisi_bio;
+ #endif
+ 
+ #ifdef CONFIG_BLK_DEV_THROTTLING
+--- a/include/linux/blkdev.h
++++ b/include/linux/blkdev.h
+@@ -238,6 +238,8 @@
+ 	* Below is for HISI Block Debug purpose
+ 	*/
+ 	struct list_head counted_list_node;
++#elif defined(CONFIG_SCSI_UFS_INLINE_CRYPTO)
++	struct hisi_inline_crypto_req hisi_req;
+ #endif
+ 	struct wb_issue_stat wb_stat;
+ #ifdef CONFIG_BLK_CGROUP
+@@ -680,6 +682,9 @@
+ 	 * various queue flags, see QUEUE_* below
+ 	 */
+ 	unsigned long		queue_flags;
++#if defined(CONFIG_SCSI_UFS_INLINE_CRYPTO) && !defined(CONFIG_HISI_BLK)
++	bool hisi_inline_crypto;
++#endif
+ 
+ 	/*
+ 	 * ida allocated id for this queue.  Used to index queues from
+@@ -2234,8 +2239,13 @@
+ static inline void blk_queue_hw_idle_notify_enable(struct request_queue *q, int enable) {}
+ static inline void blk_mq_tagset_hw_idle_notify_enable(struct blk_mq_tag_set *tag_set, int enable) {}
+ static inline void blk_mq_tagset_set_inline_crypto_flag(struct blk_mq_tag_set *tag_set, bool enable){}
+-static inline void blk_queue_set_inline_crypto_flag(struct request_queue *q, bool enable){}
+-static inline int is_blk_queue_support_crypto(struct request_queue *q){ return 0; }
++#ifdef CONFIG_SCSI_UFS_INLINE_CRYPTO
++extern void blk_queue_set_inline_crypto_flag(struct request_queue *q, bool enable);
++extern int is_blk_queue_support_crypto(struct request_queue *q);
++#else
++static inline void blk_queue_set_inline_crypto_flag(struct request_queue *q, bool enable) {}
++static inline int is_blk_queue_support_crypto(struct request_queue *q) { return 0; }
++#endif
+ static inline void blk_queue_direct_flush_register(struct request_queue *q, blk_direct_flush_fn func){}
+ static inline void blk_mq_tagset_direct_flush_register(struct blk_mq_tag_set *tag_set, blk_direct_flush_fn func){}
+ static inline void blk_queue_flush_reduce_config(struct request_queue *q, bool flush_reduce_enable){}
+--- /dev/null
++++ b/include/linux/hisi-inline-crypto.h
+@@ -0,0 +1,34 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++#ifndef _LINUX_HISI_INLINE_CRYPTO_H
++#define _LINUX_HISI_INLINE_CRYPTO_H
++
++#include <linux/bio.h>
++#include <linux/blkdev.h>
++
++/* The stock HISI_BLK implementation remains authoritative when enabled. */
++#if defined(CONFIG_SCSI_UFS_INLINE_CRYPTO) && !defined(CONFIG_HISI_BLK)
++void hisi_inline_crypto_req_init(struct request *rq);
++void hisi_inline_crypto_init_request(struct request *rq, const struct bio *bio);
++void hisi_inline_crypto_clone_bio(struct bio *dst, const struct bio *src);
++void hisi_inline_crypto_clone_request(struct request *dst,
++				    const struct request *src);
++void hisi_inline_crypto_advance(struct bio *bio, unsigned int bytes);
++bool hisi_inline_crypto_merge_allow(const struct request *rq,
++				   const struct bio *bio);
++#else
++static inline void hisi_inline_crypto_req_init(struct request *rq) {}
++static inline void hisi_inline_crypto_init_request(struct request *rq,
++						 const struct bio *bio) {}
++static inline void hisi_inline_crypto_clone_bio(struct bio *dst,
++					      const struct bio *src) {}
++static inline void hisi_inline_crypto_clone_request(struct request *dst,
++						  const struct request *src) {}
++static inline void hisi_inline_crypto_advance(struct bio *bio,
++					    unsigned int bytes) {}
++static inline bool hisi_inline_crypto_merge_allow(const struct request *rq,
++						const struct bio *bio)
++{
++	return true;
++}
++#endif
++#endif

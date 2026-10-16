@@ -2,6 +2,12 @@
 
 ## Current status: full-feature release blocked
 
+The first C port is implemented in `05-inline-crypto-c-port.patch`.
+It preserves the 4.9 UFS key/descriptor code and adds recompilable key metadata,
+request reset/initialization, clone/advance handling and crypto merge checks.
+Native host semantic tests pass; full ARM64 compilation and real storage/boot
+validation are still pending. See [C_PORT_STATUS.md](C_PORT_STATUS.md).
+
 **There is no verified full-feature bootable image. Do not flash the failed
 full/no-MEMCG builds or the experimental full-C output.** The baseline has
 booted on the phone. The restricted compat build passes CI but has not been
@@ -10,7 +16,7 @@ boot-tested and does not meet the requested Docker/isolated-network feature set.
 Further source review found that `HISI_BLK` also carries F2FS/UFS inline
 encryption, including BIO/request key metadata and split/merge propagation.
 Disabling it is not merely a performance tradeoff: the existing generic C
-fallback is incomplete for this phone. The full-C compilation fails on these
+fallback is incomplete for this phone. The earlier full-C compilation failed on these
 missing fields. Removing encryption or stubbing out key handling is not a fix.
 `build.sh` now blocks full-C image packaging even if a later compilation passes.
 See [FULL_FEATURE_STATUS.md](FULL_FEATURE_STATUS.md) for the remaining work.
