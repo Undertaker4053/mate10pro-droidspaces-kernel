@@ -2,6 +2,12 @@ name: Build BLA DroidSpaces Docker full C fallback
 
 on:
   workflow_dispatch:
+    inputs:
+      package_candidate:
+        description: 'Package an experimental manual-test image after all checks (not boot/storage verified)'
+        type: boolean
+        default: false
+        required: true
 
 permissions:
   contents: read
@@ -26,25 +32,34 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Compile C crypto port and verify diagnostic release gate
+      - name: Compile C crypto port and check selected output mode
         env:
           BUILD_VARIANT: full-c
+          FULL_C_CANDIDATE: ${{ inputs.package_candidate && '1' || '0' }}
         run: |
           set +e
           bash build.sh
           build_result=$?
           set -e
-          test "$build_result" -eq 2
-          test "$(cat artifacts/full-c-build-stage.txt)" = compiled-and-checked
           test -f artifacts/crypto-semantic-tests.json
           test -f artifacts/crypto-linked-call-check.json
-          test -z "$(find artifacts -name '*.img' -print -quit)"
-          echo 'Diagnostic compilation/checks passed; image packaging remains blocked.'
-      - name: Upload diagnostic symbols and crypto evidence (no flash image)
+          if [[ "$FULL_C_CANDIDATE" == 1 ]]; then
+            test "$build_result" -eq 0
+            test "$(cat artifacts/full-c-build-stage.txt)" = candidate-packaged-and-checked
+            test -f artifacts/BLA_EMUI9.1_KernelSU_DroidSpaces_Docker_fullC.img
+            test -f artifacts/image-check.json
+            echo 'Experimental candidate packaged. Boot, encrypted storage and Docker runtime are NOT verified.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            test "$build_result" -eq 2
+            test "$(cat artifacts/full-c-build-stage.txt)" = compiled-and-checked
+            test -z "$(find artifacts -name '*.img' -print -quit)"
+            echo 'Diagnostic checks passed. No flash image was produced.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload build output and evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: BLA-EMUI9.1-Crypto-C-port-diagnostics
+          name: ${{ inputs.package_candidate && 'BLA-EMUI9.1-fullC-EXPERIMENTAL-candidate' || 'BLA-EMUI9.1-Crypto-C-port-diagnostics' }}
           path: artifacts/
           if-no-files-found: warn
           retention-days: 14
