@@ -1,0 +1,21 @@
+Initialize crypto metadata at the shared BIO/request preparation entry point.
+This also covers SCSI passthrough BIOs appended through blk_rq_append_bio.
+
+--- a/block/blk-core.c
++++ b/block/blk-core.c
+@@ -1686,7 +1686,6 @@
+ 	req->errors = 0;
+ 	req->__sector = bio->bi_iter.bi_sector;
+ 	req->ioprio = bio_prio(bio);
+-	hisi_inline_crypto_init_request(req, bio);
+ #ifdef CONFIG_HISI_BLK
+ 	hisi_blk_request_init_from_bio(req, bio);
+ #endif
+@@ -3132,6 +3131,7 @@
+ void blk_rq_bio_prep(struct request_queue *q, struct request *rq,
+ 		     struct bio *bio)
+ {
++	hisi_inline_crypto_init_request(rq, bio);
+ 	req_set_op(rq, bio_op(bio));/*lint !e650*/
+ 
+ 	if (likely(bio_has_data(bio)))

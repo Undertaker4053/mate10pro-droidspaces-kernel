@@ -48,6 +48,8 @@ if [[ "$BUILD_VARIANT" == full-c ]]; then
     git apply "$ROOT/04-hisi-block-fallback.patch"
     git apply --check "$ROOT/05-inline-crypto-c-port.patch"
     git apply "$ROOT/05-inline-crypto-c-port.patch"
+    git apply --check "$ROOT/06-crypto-request-prep.patch"
+    git apply "$ROOT/06-crypto-request-prep.patch"
     # Key producers and UFS key/descriptor programming must stay pinned.
     git diff --exit-code -- drivers/scsi/ufs/ufs-kirin.c fs/f2fs/data.c fs/direct-io.c drivers/storage_rofa/storage_row/dm-row.c
 fi

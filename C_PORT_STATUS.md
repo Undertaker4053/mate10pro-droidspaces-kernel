@@ -22,6 +22,10 @@ successful boot or encrypted disk I/O. Full-C image packaging stays blocked.
 * Guards partition bookkeeping and UFS idle notifications that require HISI_BLK.
   It does not remove partition parsing or UFS interrupt handling.
 
+Patch 06 places request-key initialization in `blk_rq_bio_prep`, the shared
+entry point also used by SCSI passthrough's `blk_rq_append_bio`. The final-ELF
+check requires this central caller rather than just the filesystem request path.
+
 The build verifies no edits to the pinned `ufs-kirin.c` hardware crypto code,
 F2FS/direct-I/O key producers or dm-row implementation. UFS inline crypto,
 enhanced crypto, F2FS encryption and ext4 encryption remain enabled. The newer

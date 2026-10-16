@@ -52,7 +52,7 @@ def main():
             'clone_bio': [('__bio_clone_fast',),('bio_clone_bioset',)],
             'advance': [('bio_advance',)],
             'req_init': [('blk_rq_init',),('blk_mq_rq_ctx_init','__blk_mq_alloc_request','blk_mq_alloc_request','blk_mq_alloc_request_hctx')],
-            'init_request': [('init_request_from_bio',),('blk_insert_cloned_request',)],
+            'init_request': [('blk_rq_bio_prep',),('blk_insert_cloned_request',)],
             'clone_request': [('__blk_rq_prep_clone','blk_rq_prep_clone')],
             'merge_allow': [('ll_back_merge_fn',),('ll_front_merge_fn',),('blk_rq_merge_ok',),('attempt_merge','attempt_back_merge','attempt_front_merge')],
         }
