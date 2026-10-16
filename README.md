@@ -1,5 +1,33 @@
 # Mate 10 Pro BLA / EMUI 9.1 KernelSU + DroidSpaces
 
+## Device results and compatibility build (2026-10-16)
+
+The baseline was manually flashed and successfully booted. Both the full build
+and no-MEMCG build failed to boot. The no-MEMCG logs show an invalid UNIX socket
+receive-queue unlink in `__skb_try_recv_datagram+0x23c`.
+
+DWARF comparison found a concrete ABI defect: generated Huawei assembly files
+retain the stock layouts, while the expanded config changes `task_struct`,
+`sock`, `sock_common` and `sk_buff`. In no-MEMCG, `sock` grows from 936 to 944
+bytes, and `sk_buff` from 256 to 264 bytes. Reassembling `.S` does not update
+hard-coded field offsets. These conflicts can corrupt memory; they do not prove
+the complete causal history of every observed crash. Raw device logs stay local.
+
+The separate **Build BLA DroidSpaces ABI compatibility kernel** workflow builds
+`compat` from the booted baseline, adding PID/UTS/IPC namespaces and POSIX message
+queues. It retains the stock memory, network and task layouts, applies neither
+experimental source patch, and rejects selected shared-structure ABI mismatches
+against all linked generated Huawei assembly debug units.
+
+This is a restricted compatibility candidate, **not full DroidSpaces support**:
+use host/shared networking; NAT, macvlan and user namespaces are unavailable;
+System V IPC and memory/CPU quota additions are omitted. Programs requiring
+SysV shared memory/semaphores may not work. Required runtime namespace and
+container checks still need to be performed on the device. A passed build/ABI
+check does not guarantee boot. No workflow flashes or reboots the phone.
+
+## Earlier diagnostic variants
+
 The first full DroidSpaces build was reported to bootloop. Recovered kernel
 logs confirm panics during UNIX datagram / SLUB allocation. The exact cause
 is not yet established. Do not treat that image as a working release.

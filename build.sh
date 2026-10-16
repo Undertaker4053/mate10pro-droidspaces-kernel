@@ -4,7 +4,7 @@ ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 cd "$ROOT"
 BUILD_VARIANT=${BUILD_VARIANT:-droidspaces}
 case "$BUILD_VARIANT" in
-    baseline|no-memcg|droidspaces) ;;
+    baseline|no-memcg|droidspaces|compat) ;;
     *) printf 'Unknown build variant: %s\n' "$BUILD_VARIANT" >&2; exit 1 ;;
 esac
 mkdir -p artifacts
@@ -32,7 +32,7 @@ export KBUILD_BUILD_HOST=github-actions
 aarch64-linux-android-cpp --version
 
 cd kernel
-if [[ "$BUILD_VARIANT" != baseline ]]; then
+if [[ "$BUILD_VARIANT" == droidspaces || "$BUILD_VARIANT" == no-memcg ]]; then
     git apply --check "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
     git apply "$ROOT/01-qtaguid.patch" "$ROOT/02-cgroup-prefix.patch"
 fi
@@ -47,8 +47,15 @@ if [[ "$BUILD_VARIANT" == baseline ]]; then
     expected_config=out/original.config
     image_name=BLA_EMUI9.1_KernelSU_baseline.img
 else
-    cp "$ROOT/droidspaces.config" out/variant.config
+    if [[ "$BUILD_VARIANT" == compat ]]; then
+        cp "$ROOT/compat.config" out/variant.config
+    else
+        cp "$ROOT/droidspaces.config" out/variant.config
+    fi
     image_name=BLA_EMUI9.1_KernelSU_DroidSpaces.img
+    if [[ "$BUILD_VARIANT" == compat ]]; then
+        image_name=BLA_EMUI9.1_KernelSU_DroidSpaces_compat.img
+    fi
     if [[ "$BUILD_VARIANT" == no-memcg ]]; then
         sed -i 's/^CONFIG_MEMCG=y$/# CONFIG_MEMCG is not set/' out/variant.config
         sed -i 's/KernelSU_DroidSpaces_xixiaobei@Github/KernelSU_DroidSpaces_noMEMCG/' out/variant.config
@@ -64,6 +71,9 @@ cp "$expected_config" "$ROOT/artifacts/expected.config"
 cp out/.config "$ROOT/artifacts/kernel.config"
 python2 scripts/diffconfig out/original.config out/.config > "$ROOT/artifacts/config-changes.txt"
 make O=out PYTHON=python2 -j"$(nproc)" Image.gz modules
+if [[ "$BUILD_VARIANT" == compat ]]; then
+    python3 "$ROOT/verify_vendor_layouts.py" out/vmlinux . "$ROOT/artifacts/vendor-layout-check.json"
+fi
 cp out/System.map "$ROOT/artifacts/System.map"
 gzip -1 -c out/vmlinux > "$ROOT/artifacts/vmlinux.gz"
 python3 "$ROOT/repack.py" "$ROOT/boot-header.bin" out/arch/arm64/boot/Image.gz "$ROOT/artifacts/$image_name"
