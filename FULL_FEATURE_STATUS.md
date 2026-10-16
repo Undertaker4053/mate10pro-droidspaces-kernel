@@ -8,7 +8,7 @@ baseline; no phone partition writes or reboots were performed in this phase.
 | baseline | Manually booted on the phone | Known bootable recovery/reference image |
 | original full / no-MEMCG | Manual boot failures; kernel panics | Do not flash again as a fix |
 | compat | CI succeeded; selected shared layouts checked | Offline control, untested on hardware; lacks requested features |
-| full-C | Configuration checks passed; compilation exposes missing encrypted-I/O plumbing | Diagnostic source work only; packaging blocked |
+| full-C | Configuration checks passed; C backport compiled and passed semantic/ELF/assembly checks | Default diagnostic mode; explicit experimental candidate option |
 
 ## Confirmed source defect
 
@@ -71,6 +71,8 @@ container still shares the Android kernel; it is not a virtual machine with
 its own kernel. Compatibility with every modern rootfs or Docker version on
 Linux 4.9 cannot be claimed from configuration checks alone.
 
-Full-C builds may continue collecting diagnostic compile results, but an
-explicit release gate prevents flash-image packaging until the encrypted-I/O
-migration is completed. Raw phone logs remain local.
+The C implementation and its current evidence are documented in
+[C_PORT_STATUS.md](C_PORT_STATUS.md). Default full-C builds remain diagnostic;
+explicit candidate mode packages a manual-test image only after all offline
+checks pass. This does not meet the boot/storage/runtime requirements for a
+validated release. Raw phone logs remain local.

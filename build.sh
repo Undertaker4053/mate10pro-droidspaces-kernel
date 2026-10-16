@@ -3,6 +3,7 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 cd "$ROOT"
 BUILD_VARIANT=${BUILD_VARIANT:-droidspaces}
+FULL_C_CANDIDATE=${FULL_C_CANDIDATE:-0}
 case "$BUILD_VARIANT" in
     baseline|no-memcg|droidspaces|compat|full-c) ;;
     *) printf 'Unknown build variant: %s\n' "$BUILD_VARIANT" >&2; exit 1 ;;
@@ -50,6 +51,8 @@ if [[ "$BUILD_VARIANT" == full-c ]]; then
     git apply "$ROOT/05-inline-crypto-c-port.patch"
     git apply --check "$ROOT/06-crypto-request-prep.patch"
     git apply "$ROOT/06-crypto-request-prep.patch"
+    # Include newly introduced files in the reproducible source diff.
+    git add --intent-to-add block/hisi-inline-crypto.c include/linux/hisi-inline-crypto.h
     # Key producers and UFS key/descriptor programming must stay pinned.
     git diff --exit-code -- drivers/scsi/ufs/ufs-kirin.c fs/f2fs/data.c fs/direct-io.c drivers/storage_rofa/storage_row/dm-row.c
 fi
@@ -110,16 +113,20 @@ if [[ "$BUILD_VARIANT" == full-c ]]; then
 fi
 cp out/System.map "$ROOT/artifacts/System.map"
 gzip -1 -c out/vmlinux > "$ROOT/artifacts/vmlinux.gz"
-if [[ "$BUILD_VARIANT" == full-c ]]; then
-    # Deliberate release gate: removing HISI_BLK also removes inline-encryption
-    # metadata and propagation hooks. A successful compile/ASM scan alone does
-    # not validate encrypted I/O. Keep this variant diagnostic-only until a
-    # reviewed C implementation and its regression evidence replace this gate.
+if [[ "$BUILD_VARIANT" == full-c && "$FULL_C_CANDIDATE" != 1 ]]; then
+    # Diagnostic mode remains the default. Candidate packaging is opt-in and
+    # still runs all config, semantic and final-ELF checks above.
     printf '%s\n' 'compiled-and-checked' > "$ROOT/artifacts/full-c-build-stage.txt"
     printf '%s\n' 'BLOCKED: C-port diagnostic build only; real encrypted I/O and boot remain untested. No flash image is produced.' | tee "$ROOT/artifacts/DO-NOT-FLASH.txt"
     exit 2
 fi
 python3 "$ROOT/repack.py" "$ROOT/boot-header.bin" out/arch/arm64/boot/Image.gz "$ROOT/artifacts/$image_name"
+if [[ "$BUILD_VARIANT" == full-c ]]; then
+    python3 "$ROOT/verify_candidate_image.py" "$ROOT/boot-header.bin" "$ROOT/artifacts/$image_name" "$ROOT/artifacts/image-check.json"
+    rm "$ROOT/artifacts/DO-NOT-FLASH.txt"
+    printf '%s\n' 'EXPERIMENTAL: C-port candidate, not boot/storage/runtime verified. Manual testing only; this workflow never flashes or reboots a phone.' > "$ROOT/artifacts/EXPERIMENTAL-CANDIDATE.txt"
+    printf '%s\n' 'candidate-packaged-and-checked' > "$ROOT/artifacts/full-c-build-stage.txt"
+fi
 printf '%s\n' "$BUILD_VARIANT" > "$ROOT/artifacts/build-variant.txt"
 cp out/Module.symvers "$ROOT/artifacts/Module.symvers"
 find out -name '*.ko' -print0 | tar --null -T - -czf "$ROOT/artifacts/rebuilt-modules.tar.gz"

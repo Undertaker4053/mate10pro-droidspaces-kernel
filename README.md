@@ -1,25 +1,24 @@
 # Mate 10 Pro BLA / EMUI 9.1 KernelSU + DroidSpaces
 
-## Current status: full-feature release blocked
+## Current status: C port compiled; experimental candidate preparation
 
-The first C port is implemented in `05-inline-crypto-c-port.patch`.
-It preserves the 4.9 UFS key/descriptor code and adds recompilable key metadata,
-request reset/initialization, clone/advance handling and crypto merge checks.
-Native host semantic tests pass; full ARM64 compilation and real storage/boot
-validation are still pending. See [C_PORT_STATUS.md](C_PORT_STATUS.md).
+The C backport in patches 05 and 06 now passes full ARM64 compilation, 106
+configuration requirements, host crypto semantic tests and final-ELF caller
+checks. All seventeen fixed-layout generated Huawei assembly units are absent.
+The source preserves the pinned F2FS/direct-I/O key producers and UFS hardware
+crypto implementation. See [C_PORT_STATUS.md](C_PORT_STATUS.md).
 
-**There is no verified full-feature bootable image. Do not flash the failed
-full/no-MEMCG builds or the experimental full-C output.** The baseline has
-booted on the phone. The restricted compat build passes CI but has not been
-boot-tested and does not meet the requested Docker/isolated-network feature set.
+**Phone boot, encrypted storage I/O and Docker/container runtime are not yet
+verified. There is no validated full-feature release.** The baseline has booted;
+the original full and no-MEMCG builds failed and should not be reused as fixes.
 
-Further source review found that `HISI_BLK` also carries F2FS/UFS inline
-encryption, including BIO/request key metadata and split/merge propagation.
-Disabling it is not merely a performance tradeoff: the existing generic C
-fallback is incomplete for this phone. The earlier full-C compilation failed on these
-missing fields. Removing encryption or stubbing out key handling is not a fix.
-`build.sh` now blocks full-C image packaging even if a later compilation passes.
-See [FULL_FEATURE_STATUS.md](FULL_FEATURE_STATUS.md) for the remaining work.
+The full-C workflow defaults to diagnostic output with no image. Its explicit
+`package_candidate` option permits an **experimental manual-test candidate**
+only after the same compilation, semantic, assembly and ELF checks pass, plus
+Android header/hash, ARM64 payload and 24 MiB partition-size checks. This is not
+a stable release or a claim of safe encrypted I/O. It never flashes or reboots
+the phone. Retain a known bootable image and a recovery method before manual
+hardware testing. No phone logs are uploaded.
 
 ## Full feature C-fallback investigation
 

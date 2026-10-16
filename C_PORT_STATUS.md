@@ -1,7 +1,10 @@
 # First C-port implementation — 2026-10-16
 
-This is diagnostic source work. There is no new image to flash and no claim of
-successful boot or encrypted disk I/O. Full-C image packaging stays blocked.
+The C backport has passed full ARM64 diagnostic compilation and final-ELF
+checks. The default workflow still produces diagnostics only. An explicit
+`package_candidate` option can package an experimental manual-test image after
+all checks pass. No successful phone boot, encrypted disk I/O or Docker runtime
+is claimed.
 
 ## Implemented
 
@@ -56,11 +59,16 @@ current pinned source; no matching C replacements were found in that archive.
 * Full kernel compilation must succeed with the expanded container config.
   A final-ELF check inspects ARM64 branches for required helper callers, and the
   generated-assembly check must still prove all seventeen units are absent.
-* Full ARM64 compilation, final-ELF checks and real encrypted I/O/boot are not yet
-  verified at the time this document was prepared. Host tests do not establish
+* ARM64 diagnostic run [38895036795](https://github.com/Undertaker4053/mate10pro-droidspaces-kernel/actions/runs/38895036795) passed all checks. Patch 06 is undergoing the same checks in run [38896438184](https://github.com/Undertaker4053/mate10pro-droidspaces-kernel/actions/runs/38896438184).
+* Real encrypted I/O/boot remain unverified. Host tests do not establish
   disk-format compatibility, firmware interactions, power-loss behavior or
   container/Docker runtime success.
 
 The workflow reports diagnostic success only after compilation and ELF checks,
-then confirms the release gate prevented all `.img` output. It uploads debug
-symbols and evidence under `Crypto-C-port-diagnostics`, not a flashable release.
+then confirms no `.img` output in default mode. Explicit candidate mode also
+checks the original Android header (only kernel size/hash may change), gzip
+integrity, ARM64 magic/memory extent/release and the 24 MiB partition limit.
+It includes an EXPERIMENTAL marker and does not publish a stable release.
+The complete applied-source diff includes newly introduced files. Build inputs,
+config, symbol map, ELF, check reports, module CRCs and rebuilt modules accompany
+candidate output. These checks do not replace hardware validation.
